@@ -1,12 +1,16 @@
 <!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>997 拍立得 — Archive</title>
+<title>997</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;touch-action:none;background:#fff;color:#000;font:13px/1.25 "Gill Sans","Gill Sans MT",Calibri,"Trebuchet MS",sans-serif}
 a{color:inherit;text-decoration:none;cursor:pointer}
 header{position:fixed;top:0;left:0;right:0;z-index:5;background:#f5eadf;height:15px}
 .nav{display:grid;grid-template-columns:repeat(12,1fr);gap:5px;padding:0 5px;height:15px;align-items:center}
-.logo{grid-column:1/4;text-transform:uppercase;letter-spacing:.02em}
+.logo{grid-column:1/4;display:flex;align-items:center;height:15px}
+.logo img{height:9px;width:auto;display:block;opacity:0}
+.title{position:fixed;left:50%;top:50%;width:min(36vw,360px);z-index:10;transform:translate(-50%,-50%);pointer-events:none;transform-origin:0 0}
+.title svg{display:block;width:100%;height:auto;overflow:visible}
+.tag{display:inline-block;background:#2c48d6;color:#fff;border-radius:2px;padding:0 5px;margin-right:6px;font-size:11px;line-height:13px;vertical-align:1px;letter-spacing:.04em}
 .nav a.on{text-decoration:underline}
 #gl{position:fixed;inset:15px 0 0 0;z-index:1}
 .sub{position:fixed;z-index:6;top:20px;list-style:none;pointer-events:none}
@@ -21,11 +25,11 @@ header{position:fixed;top:0;left:0;right:0;z-index:5;background:#f5eadf;height:1
 .scrollbar{position:fixed;left:0;right:0;bottom:0;height:5px;background:#f5eadf;z-index:4;transition:transform 1s ease-out}
 .scrollbar:not(.active){transform:translateY(100%)}
 .thumb{width:48px;height:100%;background:#cab9a8}
-.intro{position:fixed;inset:0;z-index:9;background:rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;transition:opacity .5s ease-out}
+.intro{position:fixed;inset:0;z-index:9;background:#fff;display:flex;align-items:center;justify-content:center;transition:opacity .5s ease-out}
 .intro.disabled{opacity:0;pointer-events:none}
 </style></head><body>
 <header><nav class="nav">
- <a class="logo" id="root">997 拍立得</a>
+ <a class="logo" id="root" title="997 — Home"><img id="mark" src="brand/lockup-side-by-side.svg" alt="997"></a>
  <a id="menuFilter" style="grid-column:7/9">All</a>
  <a id="menuMode" style="grid-column:9/11">Grid / List</a>
  <span id="count" style="grid-column:11/13;text-align:right"></span>
@@ -34,7 +38,8 @@ header{position:fixed;top:0;left:0;right:0;z-index:5;background:#f5eadf;height:1
 <ul class="sub" id="sub"></ul>
 <div class="info" id="info"><p id="t1"></p><p id="t2"></p></div>
 <div class="scrollbar" id="sb"><div class="thumb" id="sbt"></div></div>
-<div class="intro" id="intro"><span id="pct">000</span></div>
+<div class="intro" id="intro"><span id="pct" style="position:absolute;bottom:12px;left:5px">000</span></div>
+<div class="title" id="title"></div>
 <script src="vendor/gsap.min.js"></script>
 <script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
 <script type="module" src="main.js"></script>

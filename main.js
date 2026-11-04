@@ -4,6 +4,8 @@ const $ = s => document.querySelector(s);
 const { lerp, smoothstep, clamp } = THREE.MathUtils;
 const DATA = await (await fetch('data.json')).json();
 const N = DATA.items.length, HEADER = 15;
+$('#title').innerHTML = await (await fetch('brand/lockup-stacked.svg')).text();
+const UI = 'cubic-bezier(.37,.215,.23,.96)';
 let W = innerWidth, H = innerHeight - HEADER;
 const mobile = () => innerWidth < 768;
 
@@ -87,7 +89,7 @@ let loadTok = 0;
 function open(i) {
   const it = items[i]; if (S.mode === 0) setMode(1, false);
   S.selected = i; bigMat.opacity = 0; big.visible = true;
-  $('#t1').textContent = it.d.title; $('#t2').textContent = it.d.categories.join(', ');
+  $('#t1').innerHTML = `<span class="tag">${String(i + 1).padStart(3, '0')}</span>` + it.d.title; $('#t2').textContent = it.d.categories.join(', ');
   const info = $('#info'); info.classList.remove('active'); setTimeout(() => S.selected === i && info.classList.add('active'), 500);
   const tok = ++loadTok, src = it.d.image.large;
   loader.load(src, tex => { if (tok !== loadTok) return; tex.colorSpace = THREE.SRGBColorSpace;
@@ -208,10 +210,29 @@ addEventListener('resize', () => { W = innerWidth; H = innerHeight - HEADER; ren
   Object.assign(cam, { left: -W / 2, right: W / 2, top: H / 2, bottom: -H / 2 }); cam.updateProjectionMatrix(); layout(); });
 
 let started = false;
+// title lockup: black 997 over blue plate, then it docks into the nav as the site mark
+const dig = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+const T = $('#title'), tsvg = T.querySelector('svg'), digPath = tsvg.querySelector('.digits'), plate = tsvg.querySelector('.plate'), holes = tsvg.querySelectorAll('.hole');
+{ const NS = 'http://www.w3.org/2000/svg', vb = tsvg.viewBox.baseVal, dh = vb.height - 240, cp = document.createElementNS(NS, 'clipPath'), g = document.createElementNS(NS, 'g');
+  cp.id = 'digClip'; cp.innerHTML = `<rect width="${vb.width}" height="${dh}"/>`; tsvg.prepend(cp); g.setAttribute('clip-path', 'url(#digClip)'); digPath.replaceWith(g); g.appendChild(dig); dig.appendChild(digPath); }
+const dh = tsvg.viewBox.baseVal.height - 240;
+gsap.set(dig, { y: dh }); gsap.set(plate, { scaleX: 0, transformOrigin: '50% 50%' }); gsap.set(holes, { opacity: 0 });
+const intro = gsap.timeline({ paused: true })
+  .to(plate, { scaleX: 1, duration: 1.4, ease: 'expo.out' }, 0)
+  .to(dig, { y: 0, duration: 1.6, ease: 'expo.out' }, .15)
+  .to(holes, { opacity: 1, duration: .5, stagger: .08, ease: UI }, .6);
+intro.play();
 function start() {
   if (started) return; started = true;
-  $('#intro').classList.add('disabled'); $('#sb').classList.add('active');
-  S.fly = H; gsap.to(S, { fly: 0, duration: 3, ease: "expo.out" });   // intro: grid slides in from above
+  $('#sb').classList.add('active');
+  setTimeout(() => {
+    $('#intro').classList.add('disabled');
+    S.fly = H; gsap.to(S, { fly: 0, duration: 3, ease: "expo.out" });   // intro: grid slides in from above
+    const m = $('#mark').getBoundingClientRect(), r = T.getBoundingClientRect();
+    gsap.to(T, { x: `+=${m.left + m.width / 2 - (r.left + r.width / 2)}`, y: `+=${m.top + m.height / 2 - (r.top + r.height / 2)}`, scale: m.height / r.height, opacity: 0, duration: 1.6, ease: 'expo.out', transformOrigin: '50% 50%' });
+    gsap.fromTo('#mark', { opacity: 0, clipPath: 'inset(0 100% 0 0)' }, { opacity: 1, clipPath: 'inset(0 0% 0 0)', duration: 1.2, delay: .35, ease: 'expo.out', onComplete: () => T.remove() });
+  }, Math.max(0, 1800 - performance.now() + t0));
 }
+const t0 = performance.now();
 setFilter(null); layout(); requestAnimationFrame(tick);
 setTimeout(start, 8000);   // safety
