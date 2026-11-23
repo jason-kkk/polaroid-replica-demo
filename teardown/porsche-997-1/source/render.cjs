@@ -4,7 +4,7 @@ const path = require('node:path');
 const {poseParts, baseParts} = require('./model.cjs');
 const {render, createCamera} = require('./lib/projection.js');
 
-const CAM = {azimuth: -36, elevation: 22, roll: 0};
+const CAM = {azimuth: -37, elevation: 17, roll: 0};
 const FRAMES = 41;
 
 function explodedBounds() {
