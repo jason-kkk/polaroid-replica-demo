@@ -111,7 +111,7 @@ function labelsFor(parts, paper) {
   return {svg, labelTop: Math.min(minY, box[1]), labelBot: Math.max(maxY, box[3]), labelLeft: Math.min(minX, box[0]), labelRight: Math.max(maxX, box[2]), box};
 }
 
-function pageHtml(frames, boxes, labels, initial, full) {
+function pageHtml(frames, boxes, initial) {
   const groups = frames.map((markup, i) => `<g id="f${i}"${i ? ' style="display:none"' : ''}>${markup}</g>`).join('');
   const boxJson = JSON.stringify(boxes.map(b => b.map(n => Math.round(n * 10) / 10)));
   return `<!DOCTYPE html>
@@ -127,29 +127,28 @@ html,body{margin:0;padding:0;background:#fff;color:#111;font-family:-apple-syste
 #scroller{height:480vh;position:relative}
 #stage{position:sticky;top:0;height:100vh;height:100svh;display:flex;flex-direction:column;overflow:hidden;background:#fff}
 a.back{position:absolute;z-index:3;left:10px;top:8px;font-size:12px;line-height:1;color:#555;text-decoration:none;border:1px solid #e6e6e6;border-radius:999px;padding:5px 10px;background:rgba(255,255,255,.92)}
-header{padding:28px 16px 0;text-align:center}
+header{padding:22px 48px 0;text-align:center}
 h1{margin:0;font-size:16px;font-weight:700;letter-spacing:.2px}
 h1 span{display:block;margin-top:2px;font-size:11px;font-weight:500;color:#777;letter-spacing:.4px}
 #stateline{font-size:10.5px;color:#999;letter-spacing:1px;margin-top:4px}
 #bar{height:2px;background:#eee;margin:5px auto 0;width:120px;border-radius:2px;overflow:hidden}
 #bar i{display:block;height:100%;width:0;background:#111}
-#wrap{flex:1;min-height:0;position:relative}
-#car{width:100%;height:100%;display:block}
+#wrap{position:relative;flex:0 0 auto}
+#car{width:100%;height:auto;max-height:64svh;display:block}
+#stage:has(#legend.show) #car{max-height:46svh}
 #car path{fill:none;stroke:#111;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
 #car .outline,[data-line-role="outline"]{stroke-width:1.15px}
 #car [data-line-role="edge"]{stroke-width:.75px}
 #car [data-line-role="detail"]{stroke-width:.5px}
-#labels path{stroke-width:.8px}
-#labels circle{fill:#111}
-#labels rect{fill:#fff;stroke:#111;stroke-width:.6px}
-#labels text{fill:#111;font-size:13px}
-#labels .zh{font-weight:650}
-#labels .en{fill:#444;font-size:9px;font-weight:500}
-#hint{position:absolute;left:0;right:0;bottom:52px;text-align:center;font-size:14px;color:#333;pointer-events:none}
+#legend{display:none;margin:0 14px 6px;padding:0;list-style:none;columns:2;column-gap:18px;font-size:13px;line-height:1.45;color:#1a1a1a}
+#legend.show{display:block}
+#legend li{break-inside:avoid;padding:1px 0}
+#legend .en{color:#666;font-size:11px;margin-left:6px}
+#hint{position:absolute;left:0;right:0;bottom:8px;text-align:center;font-size:14px;color:#333;pointer-events:none}
 #hint b{display:inline-block;background:rgba(255,255,255,.94);border:1px solid #e4e4e4;border-radius:20px;padding:7px 14px;font-weight:600}
 #hint em{font-style:normal;display:inline-block;animation:bob 1.4s ease-in-out infinite}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
-#controls{display:flex;align-items:center;gap:8px;padding:0 14px 2px}
+#controls{display:flex;align-items:center;gap:8px;padding:0 14px 2px;margin-top:auto}
 #controls input{flex:1;accent-color:#111}
 #controls span{font-size:10px;color:#888;letter-spacing:.4px}
 footer{padding:2px 14px calc(6px + env(safe-area-inset-bottom));font-size:10px;line-height:1.45;color:#888;text-align:center}
@@ -172,19 +171,35 @@ footer{padding:2px 14px calc(6px + env(safe-area-inset-bottom));font-size:10px;l
 <div id="wrap">
 <svg id="car" xmlns="http://www.w3.org/2000/svg" viewBox="${initial.map(n => Number(n).toFixed(1)).join(' ')}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="原创意向的 Porsche 911 Carrera 997.1 隐藏线拆解图">
 ${groups}
-<g id="labels" opacity="0">${labels}</g>
 </svg>
 <div id="hint"><b>往下滑动，拆开车身 <em>↓</em></b></div>
 </div>
+<ol id="legend">
+<li>车身<span class="en">Body</span></li>
+<li>前舱盖<span class="en">Front hood</span></li>
+<li>发动机舱盖<span class="en">Engine lid</span></li>
+<li>后扰流板<span class="en">Spoiler</span></li>
+<li>前保险杠<span class="en">Front bumper</span></li>
+<li>后保险杠<span class="en">Rear bumper</span></li>
+<li>左车门<span class="en">Left door</span></li>
+<li>右车门<span class="en">Right door</span></li>
+<li>左前翼子板<span class="en">Left fender</span></li>
+<li>右前翼子板<span class="en">Right fender</span></li>
+<li>左前轮<span class="en">Front left wheel</span></li>
+<li>右前轮<span class="en">Front right wheel</span></li>
+<li>左后轮<span class="en">Rear left wheel</span></li>
+<li>右后轮<span class="en">Rear right wheel</span></li>
+<li>发动机包络<span class="en">Flat-six, estimated</span></li>
+</ol>
 <div id="controls"><span>组装</span><input id="slider" type="range" min="0" max="1000" value="0" aria-label="拆解进度"><span>拆开</span></div>
 <footer>示意线稿，不是保时捷官方图，也不是尺寸精确的工程图。车身按轴距 2350 mm 对照侧视轮廓估算；欧规资料全长 4427 mm，2007 美国产品册写 4461 mm，前/后悬均为估算。轮距 1486/1534，18 英寸，单侧一条扁圆排气，扰流板收起。细部、玻璃与发动机包络均为估算。<br>Illustrative hidden-line drawing, not a Porsche document and not dimensionally exact. Wheelbase 2350 mm; EU length 4427 mm vs US brochure 4461 mm. Overhangs estimated. NTS.</footer>
 </div>
 </div>
 <script>
 (function(){
-var N=${FRAMES}, BOX=${boxJson}, FINAL=${JSON.stringify(full.map(n => Math.round(n * 10) / 10))};
+var N=${FRAMES}, BOX=${boxJson};
 var svg=document.getElementById('car'), hint=document.getElementById('hint'), bar=document.querySelector('#bar i');
-var st=document.getElementById('stateline'), lb=document.getElementById('labels'), slider=document.getElementById('slider');
+var st=document.getElementById('stateline'), legend=document.getElementById('legend'), slider=document.getElementById('slider');
 var frames=[]; for(var i=0;i<N;i++) frames.push(document.getElementById('f'+i));
 var cur=0, last=-1, req=0, fromSlider=false;
 var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -200,10 +215,8 @@ function show(p){
   if(i!==cur){frames[cur].style.display='none'; frames[i].style.display=''; cur=i;}
   var k0=Math.floor(u), k1=Math.min(N-1,k0+1), t=u-k0, a=BOX[k0], b=BOX[k1], bx=[];
   for(var j=0;j<4;j++) bx.push(a[j]+(b[j]-a[j])*t);
-  var fl=ss(.72,.96,p), v=[];
-  for(j=0;j<4;j++) v.push((bx[j]+(FINAL[j]-bx[j])*fl).toFixed(1));
-  svg.setAttribute('viewBox', v.join(' '));
-  lb.setAttribute('opacity', ss(.78,.96,p).toFixed(3));
+  svg.setAttribute('viewBox', bx.map(function(n){return n.toFixed(1)}).join(' '));
+  legend.classList.toggle('show', p>0.62);
   hint.style.opacity=(1-ss(0,.08,p)).toFixed(3);
   bar.style.width=(p*100).toFixed(1)+'%';
   st.textContent=p<.02?'Assembled · 组装状态':p>.97?'Exploded · 拆解完成':'Disassembling · 拆解中 '+Math.round(p*100)+'%';
@@ -252,7 +265,6 @@ function build(outFile) {
   let scale, offset, paper;
   const frames = [];
   const boxes = [];
-  let labelPack = null;
   for (let i = 0; i < FRAMES; i++) {
     const parts = poseParts(i / (FRAMES - 1));
     const drawn = sheet(parts, CAM, 0.12);
@@ -263,16 +275,11 @@ function build(outFile) {
     }
     frames.push(stripFrame(drawn.markup));
     const box = bboxOf(parts, paper);
-    const pad = 28;
-    boxes.push([box[0] - pad, box[1] - pad, box[2] - box[0] + pad * 2, box[3] - box[1] + pad * 2]);
-    if (i === FRAMES - 1) labelPack = labelsFor(parts, paper);
+    const padX = 22, padY = 16;
+    boxes.push([box[0] - padX, box[1] - padY, box[2] - box[0] + padX * 2, box[3] - box[1] + padY * 2]);
     if (i % 10 === 0) console.log('frame', i, 'ms', Date.now() - t0);
   }
-  const x = labelPack.labelLeft - 18;
-  const y = labelPack.labelTop - 18;
-  const w = (labelPack.labelRight - labelPack.labelLeft) + 36;
-  const h = (labelPack.labelBot - y) + 22;
-  const html = pageHtml(frames, boxes, labelPack.svg, boxes[0], [x, y, w, h]);
+  const html = pageHtml(frames, boxes, boxes[0]);
   fs.mkdirSync(path.dirname(outFile), {recursive: true});
   fs.writeFileSync(outFile, html);
   console.log('wrote', outFile, 'bytes', html.length, 'in', Date.now() - t0, 'ms');

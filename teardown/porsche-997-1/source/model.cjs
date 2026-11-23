@@ -93,20 +93,10 @@ function smooth(st, x) {
 }
 
 function stations() {
-  const xs = new Set();
-  const add = (a, b, n) => {
-    for (let i = 0; i <= n; i++) xs.add(Math.round((a + (b - a) * i / n) * 10) / 10);
-  };
-  add(TAIL, -820, 6);
-  add(-820, -380, 6);
-  add(-380, 380, 14);
-  add(380, 900, 6);
-  add(900, 1680, 8);
-  add(1680, 2050, 6);
-  add(2050, 2680, 12);
-  add(2680, 3120, 6);
-  add(3120, NOSE, 7);
-  return [...xs].sort((a, b) => a - b);
+  const xs = [];
+  for (let x = TAIL; x <= NOSE; x += 34) xs.push(Math.round(x * 10) / 10);
+  if (xs[xs.length - 1] !== NOSE) xs.push(NOSE);
+  return xs;
 }
 
 function chaikin(pts) {
@@ -123,37 +113,45 @@ function chaikin(pts) {
 }
 
 function sectionYZ(x) {
-  const hw = smooth(HW, x);
+  // One smooth half-section. z climbs once and y has a single shoulder,
+  // so the hidden-line silhouette is a curve instead of a faceted slab.
+  const hw = Math.max(40, smooth(HW, x));
   const zt = lerp(TOP, x);
   const zb = lerp(BELLY, x);
-  let flare = lerp(FLAREZ, x);
-  let belt = lerp(BELT, x);
-  if (belt < flare + 18) belt = flare + 18;
-  if (belt > zt - 8) belt = zt - 8;
-  if (flare < zb + 36) flare = zb + 36;
-  if (flare > belt - 12) flare = belt - 12;
-  const crown = Math.max(12, Math.min(smooth(CROWN, x), hw * 0.96));
-  const rockerY = hw * lerp(ROCKF, x);
-  const beltY = Math.min(hw * 0.995, hw * lerp(BELTF, x));
-  const ctr = [
-    [0, zb],
-    [hw * 0.38, zb + 6],
-    [rockerY, zb + 28],
-    [Math.max(rockerY + 8, hw * 0.93), flare],
-    [hw, (flare + belt) * 0.5],
-    [beltY, belt],
-    [(beltY + crown) * 0.5, belt + (zt - belt) * 0.48],
-    [crown, zt - Math.min(28, Math.max(8, (zt - belt) * 0.12))],
-    [crown * 0.4, zt - 3],
-    [0, zt]
-  ];
-  for (let i = 1; i < ctr.length; i++) if (ctr[i][1] < ctr[i - 1][1] + 0.5) ctr[i][1] = ctr[i - 1][1] + 0.5;
-  const pts = chaikin(ctr);
-  const maxY = Math.max(...pts.map(p => p[0]));
-  if (maxY > 1) for (const p of pts) p[0] *= hw / maxY;
+  const belt = Math.min(zt - 40, Math.max(zb + 100, lerp(BELT, x)));
+  const flare = Math.min(belt - 28, Math.max(zb + 55, lerp(FLAREZ, x)));
+  const crown = Math.max(30, Math.min(hw * 0.88, smooth(CROWN, x)));
+  const n = 16;
+  const uFlare = 0.36, uBelt = 0.50, uCrown = 0.76;
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const u = i / n;
+    let y, z;
+    if (u <= uFlare) {
+      const t = u / uFlare;
+      y = hw * Math.sin(t * Math.PI / 2);
+      z = zb + (flare - zb) * (1 - Math.cos(t * Math.PI / 2));
+    } else if (u <= uBelt) {
+      const t = (u - uFlare) / (uBelt - uFlare);
+      y = hw * (1 - 0.03 * t);
+      z = flare + (belt - flare) * t;
+    } else if (u <= uCrown) {
+      const t = (u - uBelt) / (uCrown - uBelt);
+      const s = t * t * (3 - 2 * t);
+      y = hw * 0.97 + (crown - hw * 0.97) * s;
+      z = belt + (zt - belt) * Math.sin(t * Math.PI / 2) * 0.88;
+    } else {
+      const t = (u - uCrown) / (1 - uCrown);
+      y = crown * Math.cos(t * Math.PI / 2);
+      const z0 = belt + (zt - belt) * 0.88;
+      z = z0 + (zt - z0) * Math.sin(t * Math.PI / 2);
+    }
+    pts.push([Math.max(0, y), z]);
+  }
+  for (let i = 1; i < pts.length; i++) if (pts[i][1] < pts[i - 1][1]) pts[i][1] = pts[i - 1][1] + 0.4;
   pts[0][0] = 0;
-  pts[pts.length - 1][0] = 0;
-  pts[pts.length - 1][1] = zt;
+  pts[n][0] = 0;
+  pts[n][1] = zt;
   return pts;
 }
 
@@ -212,30 +210,20 @@ function inArch(c, scale = 0.94) {
   return false;
 }
 
-function classify(x, y, z, n) {
+function classify(x, y, z, n, u) {
+  // Cuts follow a section parameter or a single station, so the seam is a
+  // smooth surface curve instead of a staircase of quads.
   const ay = Math.abs(y);
   const crown = Math.max(80, smooth(CROWN, x));
-  const belt = lerp(BELT, x);
-  const top = lerp(TOP, x);
-  // Lower nose and the leading edge. The hood still owns the sloping top.
-  if ((x > 2940 && z < 490 && ay < 820) || (x > 3260 && z < 620)) return 'bumper_front';
-  // Low tail cover only, so the lamp panel stays on the quarter.
-  if (x < -690 && z < 600) return 'bumper_rear';
-  // Front hood, from the cowl forward, between the fenders.
-  if (x > 1920 && x < 3260 && ay < crown * 1.12 && z > top - 70 && n[2] > 0.12 && z > 560) return 'hood';
-  // Slatted deck. The steeper rear window stays on the body.
-  if (x > -880 && x < 180 && ay < 740 && z > 840 && z < 1085 && n[2] > 0.45) return 'lid';
-  // Front wings, including the headlamp bowls, outside the hood.
-  if (x > 1620 && x < 3300 && ay > crown * 0.72 && z > 250 && z < top + 20 && !(x > 3000 && z < 500)) {
-    if (!(x < 1900 && z > belt - 10 && ay < crown * 1.15)) return y >= 0 ? 'fender_l' : 'fender_r';
+  if (x > 3220) return 'bumper_front';
+  if (x > 3000 && u < 0.40) return 'bumper_front';
+  if (x < -760 && u < 0.46) return 'bumper_rear';
+  if (x > 1980 && x < 3200 && u > 0.60 && ay < crown * 1.15 && z > 640) return 'hood';
+  if (x > -820 && x < 160 && u > 0.64 && ay < 760 && z < 1120 && z > 860) return 'lid';
+  if (x > 1680 && x < 3220 && u > 0.16 && u < 0.60 && ay > crown * 0.55 && !(x < 1900 && u > 0.48)) {
+    return y >= 0 ? 'fender_l' : 'fender_r';
   }
-  // Door shell. Pillars lean back as the glass rises; glass itself stays on the body.
-  if (Math.abs(n[1]) > 0.34 && z > 175 && z < belt - 8 && ay > 400) {
-    const t = Math.max(0, Math.min(1, (z - 200) / Math.max(200, belt - 200)));
-    const xFront = 1860 - t * 220;
-    const xRear = 380 + t * 200;
-    if (x > xRear && x < xFront) return y >= 0 ? 'door_l' : 'door_r';
-  }
+  if (ay > 430 && u > 0.16 && u < 0.50 && x > 620 && x < 1760) return y >= 0 ? 'door_l' : 'door_r';
   return 'body';
 }
 
@@ -308,7 +296,10 @@ function buildSkin() {
       let n = norm(cross(sub(b, a), sub(d, a)));
       const interior = [ctd[0], 0, Math.min(lerp(TOP, ctd[0]) - 30, Math.max(lerp(BELLY, ctd[0]) + 80, 620))];
       if (dot(n, sub(ctd, interior)) < 0) n = mul(n, -1);
-      const id = classify(ctd[0], ctd[1], ctd[2], n);
+      const halfN = J / 2;
+      const uOf = k => (k <= halfN ? k : J - k) / halfN;
+      const u = (uOf(j) + uOf(j2)) / 2;
+      const id = classify(ctd[0], ctd[1], ctd[2], n, u);
       quads.push({i, j, id, n});
       const ia = take(id, i, j), ib = take(id, i + 1, j), ic = take(id, i + 1, j2), idd = take(id, i, j2);
       const part = parts[id];
@@ -317,57 +308,10 @@ function buildSkin() {
     }
   }
 
-  // Nose and tail caps so the bumpers read as solids.
+  // Caps close the nose and tail. Panel gaps are drawn later as smooth
+  // curves. Grid-boundary rims were the zigzag lines across the roof.
   cap(parts.bumper_front, rings[rings.length - 1], true);
   cap(parts.bumper_rear, rings[0], false);
-
-  // Panel-gap lines and a short inward rim on boundaries.
-  const at = (i, j) => rings[i][(j + J) % J];
-  const quadAt = new Map(quads.map(q => [q.i + ':' + q.j, q]));
-  for (const q of quads) {
-    if (!q.id) continue;
-    const edges = [[q.j, 0, 1], [(q.j + 1) % J, 1, 0]];
-    // neighbours: previous station same j, and around the ring
-    const neighbors = [
-      {ni: q.i, nj: (q.j - 1 + J) % J, a: q.j, b: q.j},
-      {ni: q.i - 1, nj: q.j, a: q.j, b: (q.j + 1) % J}
-    ];
-    // edge along +j at this station (between j and j+1), shared with j-1 neighbour? 
-    // We'll emit each undirected grid edge once below.
-  }
-  const seen = new Set();
-  const boundary = (i0, j0, i1, j1, owner) => {
-    const key = [i0, j0, i1, j1].join(':');
-    const rev = [i1, j1, i0, j0].join(':');
-    if (seen.has(key) || seen.has(rev)) return;
-    seen.add(key);
-    if (!owner) return;
-    const p0 = at(i0, j0), p1 = at(i1, j1);
-    G.line(parts[owner], p0, p1, 'edge');
-    const ia = vert[owner].get(i0 + ':' + (j0 % J));
-    const ib = vert[owner].get(i1 + ':' + (j1 % J));
-    if (ia === undefined || ib === undefined) return;
-    const na = norm(vnorm[owner][ia]), nb = norm(vnorm[owner][ib]);
-    const n = norm(add(na, nb));
-    const t = 14;
-    const q0 = sub(p0, mul(n, t)), q1 = sub(p1, mul(n, t));
-    const base = parts[owner].vertices.length;
-    parts[owner].vertices.push(q0, q1);
-    const a = ia, b = ib, c = base + 1, d = base;
-    parts[owner].triangles.push([a, b, c], [a, c, d]);
-  };
-
-  for (let i = 0; i < xs.length - 1; i++) {
-    for (let j = 0; j < J; j++) {
-      const q = quadAt.get(i + ':' + j);
-      const id = q && q.id;
-      const left = quadAt.get(i + ':' + ((j - 1 + J) % J));
-      const down = i > 0 ? quadAt.get((i - 1) + ':' + j) : null;
-      if ((left && left.id) !== id) boundary(i, j, i + 1, j, id);
-      if ((down && down.id) !== id) boundary(i, j, i, (j + 1) % J, id);
-    }
-  }
-
   return {parts, rings, xs};
 }
 
@@ -422,19 +366,14 @@ function tailLamp(side) {
   return pts;
 }
 
-function lampOval(side, rx, rz) {
-  // Centre on the fender face measured around x=3050, y≈±750, z≈620.
+function lampOval(side) {
+  // One clear oval on the wing, outer end up and back. No second jagged seam.
   const pts = [];
-  const n = 34;
-  for (let i = 0; i < n; i++) {
-    const a = TAU * i / n;
-    const along = Math.cos(a) * rx;
-    const up = Math.sin(a) * rz;
-    pts.push([
-      3070 - along * 0.82 + up * 0.15,
-      side * (805 + up * 0.05),
-      625 + along * 0.28 + up
-    ]);
+  for (let i = 0; i < 28; i++) {
+    const a = TAU * i / 28;
+    const x = 3090 - Math.cos(a) * 155;
+    const u = 0.47 + Math.sin(a) * 0.07 - Math.cos(a) * 0.02;
+    pts.push(lift(skin(x, side, u), side));
   }
   return pts;
 }
@@ -460,9 +399,7 @@ function addDetails(parts) {
   // Drawn just proud of the fender so they are not swallowed by the hood crown.
   for (const side of [-1, 1]) {
     const fender = parts[side > 0 ? 'fender_l' : 'fender_r'];
-    addLoop(fender, lampOval(side, 170, 86), 'edge');
-    addLoop(fender, lampOval(side, 96, 46), 'detail');
-    addLoop(fender, ellipse(2140, 740, 32, 10, -0.2, side, 12), 'detail');
+    addLoop(fender, lampOval(side), 'edge');
   }
   for (const side of [-1, 1]) {
     addLoop(parts.bumper_front, ellipse(3235, 455, 78, 24, 0, side, 16), 'edge');
@@ -497,9 +434,14 @@ function addDetails(parts) {
     const h = onSkin(1180, side, lerp(BELT, 1180) - 70);
     G.line(door, [h[0] - 46, h[1], h[2]], [h[0] + 46, h[1], h[2]], 'detail');
   }
-  addLoop(parts.fender_r, ellipse(2060, 820, 42, 42, 0, -1, 20), 'detail');
-  // Character line just under the belt, split across the parts it crosses.
-  traceBelt(parts);
+  addLoop(parts.fender_r, (() => {
+    const pts = [];
+    for (let i = 0; i < 16; i++) {
+      const a = TAU * i / 16;
+      pts.push(lift(skin(2060 + Math.cos(a) * 28, -1, 0.52 + Math.sin(a) * 0.025), -1));
+    }
+    return pts;
+  })(), 'detail');
 }
 
 function ovalYZ(x, y, z, ry, rz, n) {
@@ -523,56 +465,74 @@ function addPlate(part, x, y, z, w, h) {
   ], 'detail');
 }
 
+function skin(x, side, u) {
+  const half = sectionYZ(Math.max(TAIL, Math.min(NOSE, x)));
+  const f = Math.max(0, Math.min(0.999, u)) * (half.length - 1);
+  const i = Math.floor(f);
+  const t = f - i;
+  const a = half[i], b = half[i + 1];
+  return [x, side * (a[0] * (1 - t) + b[0] * t), a[1] * (1 - t) + b[1] * t];
+}
+
+function lift(p, side) {
+  // Far enough outside the skin that a short chord is not swallowed by the surface.
+  if (!side) return [p[0], p[1], p[2] + 16];
+  return [p[0], p[1] + side * 16, p[2] + 4];
+}
+
 function addGlass(parts) {
-  // Windshield, side glass and rear window as frames on the fixed body.
-  addLoop(parts.body, [
-    [1985, -680, 900], [1985, 680, 900], [1120, 470, 1292], [1120, -470, 1292]
-  ], 'edge');
-  addLoop(parts.body, [
-    [160, -640, 1068], [160, 640, 1068], [900, 430, 1304], [900, -430, 1304]
-  ], 'edge');
+  const body = parts.body;
+  // Windshield: raked 911 screen, curved in plan, A-pillars included.
+  const wind = [];
+  for (let i = 0; i <= 16; i++) wind.push(lift(skin(1965, -1 + 2 * i / 16, 0.58), 0));
+  for (let i = 1; i <= 14; i++) wind.push(lift(skin(1965 + (1160 - 1965) * i / 14, 1, 0.58 + (0.90 - 0.58) * i / 14), 1));
+  for (let i = 1; i <= 16; i++) wind.push(lift(skin(1160, 1 - 2 * i / 16, 0.90), 0));
+  for (let i = 1; i < 14; i++) wind.push(lift(skin(1160 + (1965 - 1160) * i / 14, -1, 0.90 + (0.58 - 0.90) * i / 14), -1));
+  addLoop(body, wind, 'edge');
+  // Rear screen, long and sloping down to the deck.
+  const rear = [];
+  for (let i = 0; i <= 14; i++) rear.push(lift(skin(240, -1 + 2 * i / 14, 0.66), 0));
+  for (let i = 1; i <= 14; i++) rear.push(lift(skin(240 + (900 - 240) * i / 14, 1, 0.66 + (0.90 - 0.66) * i / 14), 1));
+  for (let i = 1; i <= 14; i++) rear.push(lift(skin(900, 1 - 2 * i / 14, 0.90), 0));
+  for (let i = 1; i < 14; i++) rear.push(lift(skin(900 + (240 - 900) * i / 14, -1, 0.90 + (0.66 - 0.90) * i / 14), -1));
+  addLoop(body, rear, 'edge');
   for (const side of [-1, 1]) {
-    const s = side;
-    addLoop(parts.body, [
-      [1760, s * 800, 930], [700, s * 760, 990], [860, s * 500, 1210], [1620, s * 540, 1235]
-    ], 'edge');
-    addLoop(parts.body, [
-      [660, s * 820, 1000], [240, s * 860, 1040], [300, s * 560, 1160], [600, s * 520, 1195]
-    ], 'edge');
-    // Round wheel-arch lip, so the opening does not read as a rectangle.
+    const glass = [];
+    const xs = [1720, 1500, 1240, 980, 760];
+    for (const x of xs) glass.push(lift(skin(x, side, 0.54), side));
+    glass.push(lift(skin(700, side, 0.66), side));
+    glass.push(lift(skin(860, side, 0.76), side));
+    glass.push(lift(skin(1180, side, 0.80), side));
+    glass.push(lift(skin(1560, side, 0.74), side));
+    glass.push(lift(skin(1720, side, 0.62), side));
+    addLoop(body, glass, 'edge');
+    const quarter = [];
+    for (const [x, u] of [[680, 0.55], [480, 0.56], [280, 0.60], [240, 0.70], [360, 0.78], [560, 0.76], [680, 0.66]]) {
+      quarter.push(lift(skin(x, side, u), side));
+    }
+    addLoop(body, quarter, 'edge');
     addOpen(side > 0 ? parts.fender_l : parts.fender_r, archPoints(ARCH[0], side), 'edge');
-    addOpen(parts.body, archPoints(ARCH[1], side), 'edge');
+    addOpen(body, archPoints(ARCH[1], side), 'edge');
+    // Hood shutline, one deliberate curve along the wing, plus the cowl.
+    const shut = [];
+    for (let x = 1980; x <= 3180; x += 80) shut.push(lift(skin(x, side, 0.60), side));
+    addOpen(parts.hood, shut, 'edge');
   }
+  const cowl = [];
+  for (let i = 0; i <= 12; i++) cowl.push(lift(skin(1960, -1 + 2 * i / 12, 0.60), 0));
+  addOpen(body, cowl, 'edge');
 }
 
 function archPoints(w, side) {
   const pts = [];
-  for (let i = 0; i <= 28; i++) {
-    const a = Math.PI * (0.08 + 0.84 * i / 28);
-    const x = w.x + Math.cos(a) * (w.r - 6);
-    const z = w.z + Math.sin(a) * (w.r - 6);
-    pts.push(onSkin(x, side, z));
+  for (let i = 0; i <= 22; i++) {
+    const a = Math.PI * (0.12 + 0.76 * i / 22);
+    const x = w.x + Math.cos(a) * w.r;
+    const z = w.z + Math.sin(a) * w.r;
+    const y = side * (smooth(HW, x) * 0.98);
+    pts.push([x, y, z]);
   }
   return pts;
-}
-
-function traceBelt(parts) {
-  const xs = [];
-  for (let x = -200; x <= 2500; x += 80) xs.push(x);
-  const sides = [-1, 1];
-  for (const side of sides) {
-    let prev = null, prevId = null;
-    for (const x of xs) {
-      const z = lerp(BELT, x) - 18;
-      const p = onSkin(x, side, z);
-      const crown = smooth(CROWN, x);
-      const n = Math.abs(p[1]) > crown ? [0, Math.sign(p[1]), 0.2] : [0, Math.sign(p[1]), 0.6];
-      const id = classify(p[0], p[1], p[2] - 8, norm(n));
-      if (prev && prevId === id && parts[id]) G.line(parts[id], prev, p, 'detail');
-      prev = p;
-      prevId = id;
-    }
-  }
 }
 
 function makeWheel(id, spec) {
@@ -697,7 +657,7 @@ function hingeOf(part, end) {
   // Front hinge: outermost vertex on the forward edge. Rear hinge: outermost on the back edge.
   let target = end === 'front' ? -Infinity : Infinity;
   for (const v of part.vertices) target = end === 'front' ? Math.max(target, v[0]) : Math.min(target, v[0]);
-  const near = part.vertices.filter(v => Math.abs(v[0] - target) < 55);
+  const near = part.vertices.filter(v => Math.abs(v[0] - target) < 55 && Math.abs(v[1]) < 930);
   const pool = near.length ? near : part.vertices;
   return pool.reduce((best, v) => Math.abs(v[1]) > Math.abs(best[1]) ? v : best);
 }
