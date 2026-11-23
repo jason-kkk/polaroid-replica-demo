@@ -30,12 +30,12 @@ const KEYS = [
   [-1090, 630, 690, 650, 530, 630, 570],
   [-800, 980, 1000, 810, 720, 800, 710],
   [-340, 1060, 1045, 885, 800, 875, 745],
-  [0, 1110, 1070, 904, 840, 904, 765],
-  [400, 1210, 1170, 850, 950, 850, 725],
-  [740, 1286, 1240, 690, 1004, 700, 670],
-  [1040, 1310, 1270, 545, 1010, 652, 640],
-  [1420, 1268, 1175, 590, 1008, 718, 672],
-  [1700, 1135, 1055, 750, 992, 762, 695],
+  [0, 1110, 1085, 904, 920, 904, 770],
+  [400, 1210, 1170, 904, 980, 904, 760],
+  [740, 1286, 1240, 820, 930, 800, 690],
+  [1040, 1310, 1270, 545, 900, 640, 620],
+  [1420, 1268, 1175, 590, 905, 690, 650],
+  [1700, 1135, 1055, 750, 910, 740, 680],
   [1980, 945, 1020, 860, 915, 838, 728],
   [2280, 805, 990, 895, 785, 872, 742],
   [2600, 715, 940, 902, 705, 882, 738],
@@ -119,12 +119,15 @@ function halfSection(x) {
   const peakZ = valley ? s.crownZ : s.beltZ;
   const z0 = 118;
 
-  // Flat underbody, then a steep side, so the nose is a bumper face rather than a ball.
-  // The shoulder ends with a vertical tangent so the fillet above it does not kink.
+  // Flat underbody, then a steep side. Over the rear axle the side reaches full
+  // width early, so the haunch is a volume above the wheel, not a thin widest line.
+  const full = smooth(clamp((980 - x) / 620, 0, 1));
   for (let i = 0; i <= 16; i++) {
     const u = i / 16;
+    const base = Math.sin(u * Math.PI / 2);
+    const hip = smooth(clamp((u - 0.22) / 0.45, 0, 1));
     pts[i] = [
-      peakY * Math.sin(u * Math.PI / 2),
+      peakY * (base + (1 - base) * full * hip),
       z0 + (peakZ - z0) * Math.pow(u, 1.45)
     ];
   }
@@ -184,8 +187,8 @@ function place(x, y, z) {
 function ringAt(x) {
   const half = halfSection(x);
   const ring = [];
-  for (let i = 0; i < half.length; i++) ring.push(place(x, half[i][0], half[i][1]));
-  for (let i = half.length - 2; i >= 1; i--) ring.push(place(x, -half[i][0], half[i][1]));
+  for (let i = 0; i < half.length; i++) ring.push(lampDent(...place(x, half[i][0], half[i][1])));
+  for (let i = half.length - 2; i >= 1; i--) ring.push(lampDent(...place(x, -half[i][0], half[i][1])));
   return ring;
 }
 
@@ -206,7 +209,7 @@ function classify(x, z, iHalf) {
   if (x < -780 && iHalf <= 12) return 'bumper_rear';
   if (x > 2060 && x < 3170 && iHalf >= 24) return 'hood';
   if (x > -800 && x < 260 && iHalf >= 22) return 'lid';
-  if (x > 1056 && x < 1668 && iHalf >= 4 && iHalf <= 16) return 'door';
+  if (x > 1040 && x < 1688 && iHalf >= 4 && iHalf <= 16) return 'door';
   if (x > 1860 && x < 3220 && iHalf >= 8 && iHalf <= 23) return 'fender';
   return 'body';
 }
@@ -220,18 +223,20 @@ function emptyPart(id) {
 }
 
 function doorWindowPoly() {
+  // Tall at the A-pillar, short at the B-pillar, belt lowered so the glass is the greenhouse.
   const pts = [];
-  const n = 14;
+  const n = 16;
+  const x0 = 1605, x1 = 1105, zFront = 902, zRear = 855, topRear = 1105, topFront = 1284;
   for (let i = 0; i <= n; i++) {
     const t = i / n;
-    pts.push([lerp(1588, 1148, t), lerp(1016, 988, t)]);
+    pts.push([lerp(x0, x1, t), lerp(zFront, zRear, t)]);
   }
-  for (let i = 1; i <= 5; i++) pts.push([1148, lerp(988, 1165, i / 5)]);
+  for (let i = 1; i <= 5; i++) pts.push([x1, lerp(zRear, topRear, i / 5)]);
   for (let i = 1; i <= n; i++) {
     const t = i / n;
-    pts.push([lerp(1148, 1588, t), lerp(1165, 1290, Math.pow(t, 0.72))]);
+    pts.push([lerp(x1, x0, t), lerp(topRear, topFront, Math.pow(t, 0.7))]);
   }
-  for (let i = 1; i < 6; i++) pts.push([1588, lerp(1290, 1016, i / 6)]);
+  for (let i = 1; i < 7; i++) pts.push([x0, lerp(topFront, zFront, i / 7)]);
   return pts;
 }
 
@@ -244,6 +249,13 @@ function insidePoly(x, z, poly) {
     if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / ((zj - zi) || 1e-9) + xi) n = !n;
   }
   return n;
+}
+
+function intakeHit(p) {
+  if (p[0] < 3200 || p[2] < 230 || p[2] > 450) return false;
+  const y = p[1] / 340;
+  const z = (p[2] - 390) / 70;
+  return y * y + z * z < 1;
 }
 
 function buildSkin() {
@@ -273,7 +285,8 @@ function buildSkin() {
       if (open && (j === GAP || j === rightGap)) continue;
       const quad = [rings[i][j], rings[i + 1][j], rings[i + 1][j2], rings[i][j2]];
       const ctd = centroid(quad);
-      if (insidePoly(ctd[0], ctd[2], WINDOW) && Math.abs(ctd[1]) > 520 && ctd[2] > 960 && ctd[0] > 1100 && ctd[0] < 1620) continue;
+      if (insidePoly(ctd[0], ctd[2], WINDOW) && Math.abs(ctd[1]) > 480 && ctd[2] > 820 && ctd[0] > 1080 && ctd[0] < 1630) continue;
+      if (intakeHit(ctd)) continue;
       const area = Math.hypot(...cross(sub(quad[1], quad[0]), sub(quad[3], quad[0])));
       if (area < 18) continue;
       const hi = Math.round((halfIndex(j, HALF_N) + halfIndex(j2, HALF_N)) / 2);
@@ -344,14 +357,32 @@ function skinPoint(x, side, z, out) {
 }
 
 function lampFrame(side) {
-  const x = 3185;
-  const z = 700;
-  const y = Math.min(yOnFlank(x, z) * 0.78, 760);
-  const center = [x, side * y, z];
-  const N = norm([0.84, side * 0.46, 0.2]);
+  const x = 3075;
+  const z = 705;
+  const ySurf = yOnFlank(x, z);
+  const N = norm([0.58, side * 0.74, 0.24]);
+  const center = add([x, side * ySurf, z], mul(N, 18));
   const long = norm(cross(N, [0, 0, 1]));
   const up = norm(cross(long, N));
-  return {center, N, long, up, A: 200, B: 118, side};
+  return {center, N, long, up, A: 188, B: 114, side};
+}
+
+function lampDent(x, y, z) {
+  for (const side of [-1, 1]) {
+    const f = lampFrame(side);
+    const d = [x - f.center[0], y - f.center[1], z - f.center[2]];
+    const depth = dot(d, f.N);
+    const u = dot(d, f.long) / f.A;
+    const v = dot(d, f.up) / f.B;
+    const e = u * u + v * v;
+    if (e < 1 && depth > -40 && depth < 90) {
+      const push = (1 - e) * (1 - e) * 26;
+      x -= f.N[0] * push;
+      y -= f.N[1] * push;
+      z -= f.N[2] * push;
+    }
+  }
+  return [x, y, z];
 }
 
 function ellipsePts(frame, scale, along, n = 42) {
@@ -368,23 +399,29 @@ function ellipsePts(frame, scale, along, n = 42) {
 
 function addFriedEgg(part, side) {
   const f = lampFrame(side);
-  const bezel = ellipsePts(f, 1, 14, 48);
-  const lip = ellipsePts(f, 0.9, 14, 48);
-  const recess = ellipsePts(f, 0.88, -6, 48);
-  const lens = ellipsePts(f, 0.76, 0, 48);
+  const bezel = ellipsePts(f, 1, 10, 52);
+  const lip = ellipsePts(f, 0.92, 10, 52);
+  const recess = ellipsePts(f, 0.9, -18, 52);
+  const lens = ellipsePts(f, 0.78, -8, 52);
   addBand(part, bezel, lip);
   addBand(part, lip, recess);
   addBand(part, recess, lens);
   addLoop(part, bezel, 'edge');
   addLoop(part, lens, 'edge');
   const outboard = norm(sub([0, side, 0], mul(f.N, dot([0, side, 0], f.N))));
-  const pc = add(add(f.center, mul(f.N, 4)), mul(outboard, 30));
-  const ring = [];
-  for (let i = 0; i < 40; i++) {
-    const a = TAU * i / 40;
-    ring.push(add(pc, add(mul(f.long, Math.cos(a) * 56), mul(f.up, Math.sin(a) * 56))));
-  }
-  addLoop(part, ring, 'edge');
+  const projector = add(add(f.center, mul(f.N, -2)), mul(outboard, 36));
+  const indicator = add(add(f.center, mul(f.N, -2)), mul(outboard, -48));
+  const ring = (c, r, n) => {
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const a = TAU * i / n;
+      pts.push(add(c, add(mul(f.long, Math.cos(a) * r), mul(f.up, Math.sin(a) * r))));
+    }
+    return pts;
+  };
+  addLoop(part, ring(projector, 62, 40), 'edge');
+  addLoop(part, ring(projector, 28, 24), 'detail');
+  addLoop(part, ring(indicator, 34, 28), 'edge');
 }
 
 function placeRoundLamp(part, at, radius) {
@@ -409,16 +446,51 @@ function roundedRect(x, y0, y1, z0, z1, n = 8) {
   return pts;
 }
 
+function bumperPoint(y, z, proud) {
+  let x = NOSE;
+  for (let i = 0; i < 8; i++) {
+    const ySurf = yOnFlank(x, z);
+    x += (Math.abs(y) - ySurf) * 0.15;
+    x = clamp(x, 3120, NOSE + 30);
+  }
+  const p = place(x, y, z);
+  p[0] += proud || 0;
+  return p;
+}
+
 function addDetails(parts) {
   for (const side of [-1, 1]) addFriedEgg(parts[side > 0 ? 'fender_l' : 'fender_r'], side);
 
-  const intake = roundedRect(3322, -340, 340, 255, 448, 7);
-  const intakeIn = intake.map(p => [p[0] - 22, p[1] * 0.9, 255 + (p[2] - 255) * 0.84]);
+  const intake = [];
+  const n = 28;
+  for (let i = 0; i < n; i++) {
+    const a = TAU * i / n;
+    const y = Math.cos(a) * 390;
+    const z = 390 + Math.sin(a) * 88;
+    intake.push(bumperPoint(y, z, 26));
+  }
+  const intakeIn = intake.map(p => [p[0] - 28, p[1] * 0.86, 300 + (p[2] - 300) * 0.72]);
   addBand(parts.bumper_front, intake, intakeIn);
   addLoop(parts.bumper_front, intake, 'edge');
-  addOpen(parts.bumper_front, [[3332, -400, 208], [3348, 0, 186], [3332, 400, 208]], 'edge');
+  for (let k = -1; k <= 1; k++) {
+    addOpen(parts.bumper_front, [bumperPoint(-280, 318 + k * 28, -6), bumperPoint(280, 318 + k * 28, -6)], 'detail');
+  }
+  const lip = [];
+  for (let i = 0; i <= 16; i++) {
+    const t = i / 16;
+    const y = lerp(-520, 520, t);
+    lip.push(bumperPoint(y, 210 + Math.cos((t - 0.5) * Math.PI) * 18, 22));
+  }
+  addOpen(parts.bumper_front, lip, 'edge');
   for (const side of [-1, 1]) {
-    placeRoundLamp(parts.bumper_front, [3304, side * 568, 378], 44);
+    const at = bumperPoint(side * 620, 360, 16);
+    placeRoundLamp(parts.bumper_front, at, 52);
+    const bezel = [];
+    for (let i = 0; i < 24; i++) {
+      const a = TAU * i / 24;
+      bezel.push([at[0] + 6, at[1] + Math.cos(a) * 68, at[2] + Math.sin(a) * 68]);
+    }
+    addLoop(parts.bumper_front, bezel, 'edge');
   }
 
   addGlass(parts);
@@ -496,7 +568,7 @@ function addGlass(parts) {
     for (let i = 1; i < glass.length - 1; i++) door.triangles.push([base, base + i, base + i + 1]);
 
     const q = [];
-    const qx0 = 880, qx1 = 1035, qz0 = 1140, qz1 = 1246;
+    const qx0 = 820, qx1 = 1005, qz0 = 1088, qz1 = 1228;
     for (let i = 0; i <= 5; i++) q.push(skinPoint(lerp(qx0, qx1, i / 5), side, qz0, 6));
     for (let i = 1; i <= 3; i++) q.push(skinPoint(qx1, side, lerp(qz0, qz1, i / 3), 6));
     for (let i = 1; i <= 5; i++) q.push(skinPoint(lerp(qx1, qx0, i / 5), side, qz1, 6));
