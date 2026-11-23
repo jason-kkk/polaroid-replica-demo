@@ -32,9 +32,9 @@ const BELLY = [
 ];
 // Half-width of the widest plan section. 904 = 1808 / 2. Estimated plan taper.
 const HW = [
-  [-1091, 420], [-980, 740], [-700, 850], [-280, 890], [0, 904],
-  [420, 820], [1000, 755], [1500, 790], [1860, 860], [2300, 900],
-  [2680, 888], [3020, 800], [3200, 640], [3290, 420], [3339, 220]
+  [-1091, 520], [-960, 820], [-640, 880], [-180, 904], [0, 904],
+  [380, 800], [900, 730], [1400, 760], [1780, 850], [2300, 898],
+  [2750, 870], [3050, 820], [3220, 700], [3339, 480]
 ];
 // Height of the widest shoulder (flare), below the window belt on the haunches.
 const FLAREZ = [
@@ -49,9 +49,9 @@ const BELT = [
 ];
 // Half-width of the roof, deck or hood crown.
 const CROWN = [
-  [-1091, 180], [-820, 500], [-300, 640], [250, 520], [900, 500],
-  [1400, 560], [1750, 640], [2050, 700], [2550, 660], [3000, 480],
-  [3220, 300], [3339, 120]
+  [-1091, 220], [-780, 520], [-200, 600], [300, 420], [900, 380],
+  [1300, 440], [1680, 560], [1980, 680], [2500, 700], [3000, 560],
+  [3250, 400], [3339, 220]
 ];
 const ROCKF = [[-1091, 0.78], [0, 0.70], [1100, 0.84], [2300, 0.74], [3339, 0.88]];
 const BELTF = [[-1091, 0.72], [0, 0.86], [1100, 0.98], [1800, 0.94], [2500, 0.90], [3339, 0.72]];
@@ -62,8 +62,8 @@ const FRONT_AXLE = 2350;
 const REAR_AXLE = 0;
 
 const ARCH = [
-  {x: FRONT_AXLE, z: 322.6, r: 390, yIn: 500},
-  {x: REAR_AXLE, z: 334.6, r: 408, yIn: 530}
+  {x: FRONT_AXLE, z: 322.6, r: 368, yIn: 480},
+  {x: REAR_AXLE, z: 334.6, r: 382, yIn: 500}
 ];
 
 function lerp(st, x) {
@@ -94,7 +94,7 @@ function smooth(st, x) {
 
 function stations() {
   const xs = [];
-  for (let x = TAIL; x <= NOSE; x += 34) xs.push(Math.round(x * 10) / 10);
+  for (let x = TAIL; x <= NOSE; x += 22) xs.push(Math.round(x * 10) / 10);
   if (xs[xs.length - 1] !== NOSE) xs.push(NOSE);
   return xs;
 }
@@ -121,7 +121,7 @@ function sectionYZ(x) {
   const belt = Math.min(zt - 40, Math.max(zb + 100, lerp(BELT, x)));
   const flare = Math.min(belt - 28, Math.max(zb + 55, lerp(FLAREZ, x)));
   const crown = Math.max(30, Math.min(hw * 0.88, smooth(CROWN, x)));
-  const n = 16;
+  const n = 28;
   const uFlare = 0.36, uBelt = 0.50, uCrown = 0.76;
   const pts = [];
   for (let i = 0; i <= n; i++) {
@@ -156,21 +156,10 @@ function sectionYZ(x) {
 }
 
 function conformArch(x, y, z) {
-  let yy = y, zz = z;
-  const side = Math.sign(y) || 1;
-  for (const w of ARCH) {
-    const dx = x - w.x;
-    if (Math.abs(dx) >= w.r - 0.5) continue;
-    if (Math.abs(yy) < w.yIn) continue;
-    const h = Math.sqrt(Math.max(0, w.r * w.r - dx * dx));
-    const zU = w.z + h, zL = w.z - h;
-    if (zz > zL && zz < zU) {
-      if (zz >= w.z - 20) zz = zU;
-      else if (zL >= lerp(BELLY, x) + 6) zz = zL;
-      else yy = side * (w.yIn - 6);
-    }
-  }
-  return [yy, zz];
+  // Leave the section alone. Squashing points onto the arch crown made a
+  // rectangular opening. The round lip is a drawn circle; the mesh hole is the
+  // circle test in inArch.
+  return [y, z];
 }
 
 function ringAt(x) {
@@ -215,15 +204,16 @@ function classify(x, y, z, n, u) {
   // smooth surface curve instead of a staircase of quads.
   const ay = Math.abs(y);
   const crown = Math.max(80, smooth(CROWN, x));
-  if (x > 3220) return 'bumper_front';
-  if (x > 3000 && u < 0.40) return 'bumper_front';
-  if (x < -760 && u < 0.46) return 'bumper_rear';
+  // Bumper is the lower chin and a short nose cap, not a vertical cut through the lamps.
+  if (x > 3280 && u < 0.55) return 'bumper_front';
+  if (x > 2960 && u < 0.34) return 'bumper_front';
+  if (x < -780 && u < 0.40) return 'bumper_rear';
   if (x > 1980 && x < 3200 && u > 0.60 && ay < crown * 1.15 && z > 640) return 'hood';
   if (x > -820 && x < 160 && u > 0.64 && ay < 760 && z < 1120 && z > 860) return 'lid';
   if (x > 1680 && x < 3220 && u > 0.16 && u < 0.60 && ay > crown * 0.55 && !(x < 1900 && u > 0.48)) {
     return y >= 0 ? 'fender_l' : 'fender_r';
   }
-  if (ay > 430 && u > 0.16 && u < 0.50 && x > 620 && x < 1760) return y >= 0 ? 'door_l' : 'door_r';
+  if (ay > 430 && u > 0.18 && u < 0.44 && x > 700 && x < 1720) return y >= 0 ? 'door_l' : 'door_r';
   return 'body';
 }
 
@@ -366,14 +356,20 @@ function tailLamp(side) {
   return pts;
 }
 
-function lampOval(side) {
-  // One clear oval on the wing, outer end up and back. No second jagged seam.
+function lampOval(side, scale = 1) {
+  // Large clear 997.1 lamp on the front face of the wing, proud of the surface
+  // so the oval is not swallowed. Outer end sits up and back.
   const pts = [];
-  for (let i = 0; i < 28; i++) {
-    const a = TAU * i / 28;
-    const x = 3090 - Math.cos(a) * 155;
-    const u = 0.47 + Math.sin(a) * 0.07 - Math.cos(a) * 0.02;
-    pts.push(lift(skin(x, side, u), side));
+  const n = 40;
+  for (let i = 0; i < n; i++) {
+    const a = TAU * i / n;
+    const dx = Math.cos(a) * 155 * scale;
+    const dz = Math.sin(a) * 82 * scale;
+    const x = 2960 + dx * 0.55 - dz * 0.35;
+    const z = 710 + dz * 0.92 + dx * 0.22;
+    const u = 0.36 + (z - 710) / 1400;
+    const p = skin(x, side, Math.max(0.18, Math.min(0.58, u)));
+    pts.push([p[0] + 18, p[1] + side * 22, z]);
   }
   return pts;
 }
@@ -399,7 +395,8 @@ function addDetails(parts) {
   // Drawn just proud of the fender so they are not swallowed by the hood crown.
   for (const side of [-1, 1]) {
     const fender = parts[side > 0 ? 'fender_l' : 'fender_r'];
-    addLoop(fender, lampOval(side), 'edge');
+    addLoop(fender, lampOval(side, 1), 'edge');
+    addLoop(fender, lampOval(side, 0.55), 'detail');
   }
   for (const side of [-1, 1]) {
     addLoop(parts.bumper_front, ellipse(3235, 455, 78, 24, 0, side, 16), 'edge');
@@ -419,12 +416,11 @@ function addDetails(parts) {
   }
   addPlate(parts.bumper_rear, -1104, 0, 460, 140, 100);
   // Engine-lid slats, transverse, retracted-spoiler car.
-  for (let i = 0; i < 8; i++) {
-    const x = -40 - i * 78;
-    const z = lerp(TOP, x);
-    const half = 430 - Math.abs(i - 3.5) * 18;
-    G.line(parts.lid, [x, -half, z + 7], [x, half, z + 7], 'detail');
-    G.line(parts.lid, [x - 10, -half + 24, z + 7], [x - 10, half - 24, z + 7], 'detail');
+  for (let i = 0; i < 6; i++) {
+    const x = -80 - i * 90;
+    const z = lerp(TOP, x) + 8;
+    const half = 400 - Math.abs(i - 2.5) * 16;
+    G.line(parts.lid, [x, -half, z], [x, half, z], 'detail');
   }
   // Glass frames kept on the body. Door shell stops at the belt.
   addGlass(parts);
@@ -498,13 +494,12 @@ function addGlass(parts) {
   addLoop(body, rear, 'edge');
   for (const side of [-1, 1]) {
     const glass = [];
-    const xs = [1720, 1500, 1240, 980, 760];
-    for (const x of xs) glass.push(lift(skin(x, side, 0.54), side));
-    glass.push(lift(skin(700, side, 0.66), side));
-    glass.push(lift(skin(860, side, 0.76), side));
-    glass.push(lift(skin(1180, side, 0.80), side));
-    glass.push(lift(skin(1560, side, 0.74), side));
-    glass.push(lift(skin(1720, side, 0.62), side));
+    for (let i = 0; i <= 8; i++) glass.push(lift(skin(1700 - i * 120, side, 0.48), side));
+    glass.push(lift(skin(740, side, 0.62), side));
+    glass.push(lift(skin(860, side, 0.78), side));
+    glass.push(lift(skin(1100, side, 0.84), side));
+    glass.push(lift(skin(1400, side, 0.82), side));
+    glass.push(lift(skin(1680, side, 0.66), side));
     addLoop(body, glass, 'edge');
     const quarter = [];
     for (const [x, u] of [[680, 0.55], [480, 0.56], [280, 0.60], [240, 0.70], [360, 0.78], [560, 0.76], [680, 0.66]]) {
@@ -529,7 +524,7 @@ function archPoints(w, side) {
     const a = Math.PI * (0.12 + 0.76 * i / 22);
     const x = w.x + Math.cos(a) * w.r;
     const z = w.z + Math.sin(a) * w.r;
-    const y = side * (smooth(HW, x) * 0.98);
+    const y = side * (smooth(HW, x) + 6);
     pts.push([x, y, z]);
   }
   return pts;
@@ -588,15 +583,14 @@ function translate(p, d) {
 }
 
 function addMirrors(parts) {
-  // Single-arm 997.1 mirror, rooted in the A-pillar triangle of each door.
+  // Single-arm 997.1 mirror in the front of the side window, not a brick above the wing.
   const add = (door, side) => {
-    const ySkin = side * (smooth(HW, 1720) - 6);
-    const yOut = side * 980;
-    const z0 = 990, z1 = 1055;
-    G.box(door, [1688, Math.min(ySkin, yOut), z0], [1784, Math.max(ySkin, yOut), z1], {radius: 12, role: 'edge'});
-    const a0 = side > 0 ? ySkin - 4 : yOut + 55;
-    const a1 = side > 0 ? yOut - 55 : ySkin + 4;
-    G.box(door, [1710, Math.min(a0, a1), 1012], [1748, Math.max(a0, a1), 1038], {radius: 5, role: 'edge'});
+    const ySkin = side * (smooth(HW, 1680) - 4);
+    const yOut = side * 960;
+    G.box(door, [1648, Math.min(ySkin, yOut), 1008], [1736, Math.max(ySkin, yOut), 1064], {radius: 14, role: 'edge'});
+    const a0 = side > 0 ? ySkin : yOut + 40;
+    const a1 = side > 0 ? yOut - 40 : ySkin;
+    G.box(door, [1672, Math.min(a0, a1), 1024], [1704, Math.max(a0, a1), 1046], {radius: 4, role: 'edge'});
   };
   add(parts.door_l, 1);
   add(parts.door_r, -1);

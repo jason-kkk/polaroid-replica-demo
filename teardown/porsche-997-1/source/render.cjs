@@ -4,7 +4,7 @@ const path = require('node:path');
 const {poseParts, baseParts} = require('./model.cjs');
 const {render, createCamera} = require('./lib/projection.js');
 
-const CAM = {azimuth: -50, elevation: 18, roll: 0};
+const CAM = {azimuth: -40, elevation: 16, roll: 0};
 const FRAMES = 41;
 
 function explodedBounds() {
@@ -267,7 +267,7 @@ function build(outFile) {
   const boxes = [];
   for (let i = 0; i < FRAMES; i++) {
     const parts = poseParts(i / (FRAMES - 1));
-    const drawn = sheet(parts, CAM, 0.12);
+    const drawn = sheet(parts, CAM, 0.15);
     if (!paper) {
       scale = drawn.scale;
       offset = drawn.offset;
