@@ -32,9 +32,9 @@ const BELLY = [
 ];
 // Half-width of the widest plan section. 904 = 1808 / 2. Estimated plan taper.
 const HW = [
-  [-1091, 520], [-960, 820], [-640, 880], [-180, 904], [0, 904],
-  [380, 800], [900, 730], [1400, 760], [1780, 850], [2300, 898],
-  [2750, 870], [3050, 820], [3220, 700], [3339, 480]
+  [-1091, 560], [-980, 800], [-700, 870], [-220, 904], [40, 904],
+  [420, 790], [980, 710], [1500, 750], [1820, 860], [2350, 900],
+  [2800, 890], [3100, 870], [3240, 830], [3339, 720]
 ];
 // Height of the widest shoulder (flare), below the window belt on the haunches.
 const FLAREZ = [
@@ -49,9 +49,9 @@ const BELT = [
 ];
 // Half-width of the roof, deck or hood crown.
 const CROWN = [
-  [-1091, 220], [-780, 520], [-200, 600], [300, 420], [900, 380],
-  [1300, 440], [1680, 560], [1980, 680], [2500, 700], [3000, 560],
-  [3250, 400], [3339, 220]
+  [-1091, 260], [-820, 480], [-200, 520], [200, 460], [900, 360],
+  [1400, 420], [1750, 620], [2050, 740], [2600, 760], [3050, 700],
+  [3240, 620], [3339, 480]
 ];
 const ROCKF = [[-1091, 0.78], [0, 0.70], [1100, 0.84], [2300, 0.74], [3339, 0.88]];
 const BELTF = [[-1091, 0.72], [0, 0.86], [1100, 0.98], [1800, 0.94], [2500, 0.90], [3339, 0.72]];
@@ -156,10 +156,18 @@ function sectionYZ(x) {
 }
 
 function conformArch(x, y, z) {
-  // Leave the section alone. Squashing points onto the arch crown made a
-  // rectangular opening. The round lip is a drawn circle; the mesh hole is the
-  // circle test in inArch.
-  return [y, z];
+  // Pull outer skin that falls inside a wheel circle out onto that circle,
+  // changing only height. The lip is then a circular arc, not a rectangle.
+  if (Math.abs(y) < 460) return [y, z];
+  let zz = z;
+  for (const w of ARCH) {
+    const dx = x - w.x;
+    if (Math.abs(dx) >= w.r - 1) continue;
+    const h = Math.sqrt(w.r * w.r - dx * dx);
+    const zU = w.z + h, zL = w.z - h;
+    if (zz > zL && zz < zU) zz = zz >= w.z ? zU : Math.max(zL, lerp(BELLY, x) + 8);
+  }
+  return [y, zz];
 }
 
 function ringAt(x) {
@@ -347,31 +355,60 @@ function onSkin(x, side, zTarget) {
 }
 
 function tailLamp(side) {
-  // Rounder 997.1 lens on the rear quarter, one each side. Not the 997.2 LED shape.
+  // Round 997.1 lens across the rear quarter. Not the sharper 997.2 lamp.
   const pts = [];
-  for (let i = 0; i < 26; i++) {
-    const a = TAU * i / 26;
-    pts.push([-1015 - Math.sin(a) * 10, side * (560 + Math.cos(a) * 155), 790 + Math.sin(a) * 52]);
+  for (let i = 0; i < 32; i++) {
+    const a = TAU * i / 32;
+    pts.push([-1005 - Math.sin(a) * 18, side * (500 + Math.cos(a) * 210), 830 + Math.sin(a) * 58]);
   }
   return pts;
 }
 
 function lampOval(side, scale = 1) {
-  // Large clear 997.1 lamp on the front face of the wing, proud of the surface
-  // so the oval is not swallowed. Outer end sits up and back.
+  // Disc faces the 3/4 camera and sits on the fender corner, behind the nose tip.
+  const C = [3060, side * 760, 700];
+  const n = side < 0 ? [0.73, -0.60, 0.32] : [0.73, 0.60, 0.32];
+  let u = [-0.32, 0, 0.95];
+  const du = u[0] * n[0] + u[1] * n[1] + u[2] * n[2];
+  u = [u[0] - n[0] * du, u[1] - n[1] * du, u[2] - n[2] * du];
+  const ul = Math.hypot(...u) || 1;
+  u = u.map(v => v / ul);
+  const v = [
+    n[1] * u[2] - n[2] * u[1],
+    n[2] * u[0] - n[0] * u[2],
+    n[0] * u[1] - n[1] * u[0]
+  ];
   const pts = [];
-  const n = 40;
-  for (let i = 0; i < n; i++) {
-    const a = TAU * i / n;
-    const dx = Math.cos(a) * 155 * scale;
-    const dz = Math.sin(a) * 82 * scale;
-    const x = 2960 + dx * 0.55 - dz * 0.35;
-    const z = 710 + dz * 0.92 + dx * 0.22;
-    const u = 0.36 + (z - 710) / 1400;
-    const p = skin(x, side, Math.max(0.18, Math.min(0.58, u)));
-    pts.push([p[0] + 18, p[1] + side * 22, z]);
+  for (let i = 0; i < 40; i++) {
+    const a = TAU * i / 40;
+    const c = Math.cos(a) * 168 * scale, s = Math.sin(a) * 102 * scale;
+    pts.push([
+      C[0] + n[0] * 16 + c * u[0] + s * v[0],
+      C[1] + n[1] * 16 + c * u[1] + s * v[1],
+      C[2] + n[2] * 16 + c * u[2] + s * v[2]
+    ]);
   }
   return pts;
+}
+
+function addFriedEgg(part, side) {
+  // A shallow lens volume so the lamp has a real outline, not only a floating stroke.
+  const lamp = G.piece();
+  G.lathe(lamp, [[-8, 0], [0, 70], [28, 108], [62, 96], [88, 40], [96, 0]], {axis: 'x', segments: 32, role: 'edge'});
+  for (const v of lamp.vertices) v[2] *= 0.62;
+  for (const l of lamp.lines) { l.a[2] *= 0.62; l.b[2] *= 0.62; }
+  const tilt = -0.42, yaw = side * 0.85;
+  const ct = Math.cos(tilt), st = Math.sin(tilt), cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const place = v => {
+    let x = v[0], y = v[1], z = v[2];
+    const x2 = ct * x + st * z, z2 = -st * x + ct * z;
+    v[0] = cy * x2 - sy * y + 3140;
+    v[1] = sy * x2 + cy * y + side * 700;
+    v[2] = z2 + 740;
+  };
+  lamp.vertices.forEach(place);
+  lamp.lines.forEach(l => { place(l.a); place(l.b); });
+  G.merge(part, lamp);
 }
 
 function ellipse(cx, cz, rx, rz, tilt, side, n = 28) {
@@ -396,16 +433,16 @@ function addDetails(parts) {
   for (const side of [-1, 1]) {
     const fender = parts[side > 0 ? 'fender_l' : 'fender_r'];
     addLoop(fender, lampOval(side, 1), 'edge');
-    addLoop(fender, lampOval(side, 0.55), 'detail');
+    addLoop(fender, lampOval(side, 0.46), 'detail');
   }
+  // Gentle hood centre crease. The surface itself stays broad, not a ridge.
+  G.line(parts.hood, [2050, 0, lerp(TOP, 2050) + 14], [3220, 0, lerp(TOP, 3220) + 12], 'detail');
+  // Stock Carrera: one wide lower mouth, two round fogs outboard, blank plate. No crest.
+  addLoop(parts.bumper_front, ovalYZ(3310, 0, 280, 280, 55, 28), 'edge');
   for (const side of [-1, 1]) {
-    addLoop(parts.bumper_front, ellipse(3235, 455, 78, 24, 0, side, 16), 'edge');
+    addLoop(parts.bumper_front, ovalYZ(3285, side * 560, 430, 55, 32, 20), 'edge');
   }
-  // One wide centre mouth, two side intakes, blank plate. No crest or script.
-  addIntake(parts.bumper_front, 3295, 0, 250, 520, 90);
-  addIntake(parts.bumper_front, 3260, 560, 230, 170, 64);
-  addIntake(parts.bumper_front, 3260, -560, 230, 170, 64);
-  addPlate(parts.bumper_front, 3310, 0, 400, 200, 72);
+  addPlate(parts.bumper_front, 3320, 0, 430, 190, 70);
   // Tail lamps — rounder 997.1 lenses, one each side.
   for (const side of [-1, 1]) {
     addLoop(parts.body, tailLamp(side), 'edge');
@@ -506,8 +543,8 @@ function addGlass(parts) {
       quarter.push(lift(skin(x, side, u), side));
     }
     addLoop(body, quarter, 'edge');
-    addOpen(side > 0 ? parts.fender_l : parts.fender_r, archPoints(ARCH[0], side), 'edge');
-    addOpen(body, archPoints(ARCH[1], side), 'edge');
+    // Wheel-arch lip is the mesh edge pulled onto the circle. A second stroked
+    // circle was drawing beside that edge and reading as a broken arch.
     // Hood shutline, one deliberate curve along the wing, plus the cowl.
     const shut = [];
     for (let x = 1980; x <= 3180; x += 80) shut.push(lift(skin(x, side, 0.60), side));
@@ -585,12 +622,12 @@ function translate(p, d) {
 function addMirrors(parts) {
   // Single-arm 997.1 mirror in the front of the side window, not a brick above the wing.
   const add = (door, side) => {
-    const ySkin = side * (smooth(HW, 1680) - 4);
-    const yOut = side * 960;
-    G.box(door, [1648, Math.min(ySkin, yOut), 1008], [1736, Math.max(ySkin, yOut), 1064], {radius: 14, role: 'edge'});
+    const ySkin = side * (smooth(HW, 1660) - 2);
+    const yOut = side * 940;
+    G.box(door, [1588, Math.min(ySkin, yOut), 960], [1688, Math.max(ySkin, yOut), 1024], {radius: 16, role: 'edge'});
     const a0 = side > 0 ? ySkin : yOut + 40;
     const a1 = side > 0 ? yOut - 40 : ySkin;
-    G.box(door, [1672, Math.min(a0, a1), 1024], [1704, Math.max(a0, a1), 1046], {radius: 4, role: 'edge'});
+    G.box(door, [1610, Math.min(a0, a1), 978], [1652, Math.max(a0, a1), 1004], {radius: 4, role: 'edge'});
   };
   add(parts.door_l, 1);
   add(parts.door_r, -1);
